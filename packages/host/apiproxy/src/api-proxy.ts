@@ -1075,12 +1075,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const pendingQuestions = new Map<RpcId, PendingQuestion>()
   const pendingApprovals = new Map<RpcId, PendingApproval>()
   const muxQueues = new Set<FrameQueue<RpcRequest<MuxFrame>>>()
-  const imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
+  const selectionAdmissionChains = new WeakMap<Agent, Promise<void>>()
 
-  /** Serialize image admission with model selection for one agent. */
-  function serializeImageAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
-    const result = (imageAdmissionChains.get(agent) ?? Promise.resolve()).then(operation)
-    imageAdmissionChains.set(agent, result.then(() => undefined, () => undefined))
+  /**
+   * Serialize the per-agent operations that must order against model selection:
+   * an accepted switch, an image-capability check, and a prompt's turn
+   * dispatch. A switch's write follows an awaited validation, so without this
+   * ordering a prompt dispatched after the switch can assemble first and read
+   * the fallback tier instead — for a blank session that tier is the process
+   * default, which any other session's switch may have set, sending the turn
+   * to a model this session never chose.
+   */
+  function serializeSelectionAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
+    const result = (selectionAdmissionChains.get(agent) ?? Promise.resolve()).then(operation)
+    selectionAdmissionChains.set(agent, result.then(() => undefined, () => undefined))
     return result
   }
 
@@ -2199,7 +2207,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const { sessionId, provider, model, reasoningEffort } = request.payload
         const found = await agentFor(sessionId)
         if ('error' in found) return err(request, found.error)
-        return serializeImageAdmission(found.agent, async () => {
+        return serializeSelectionAdmission(found.agent, async () => {
           try {
             const resolved = await ctx.llm.resolveCallConfig({
               provider,
@@ -2429,7 +2437,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }
           return ok(request, { accepted: true as const })
         }
-        return hasImage ? serializeImageAdmission(agent, admit) : admit()
+        return serializeSelectionAdmission(agent, admit)
       },
 
       async attachment(request) {
