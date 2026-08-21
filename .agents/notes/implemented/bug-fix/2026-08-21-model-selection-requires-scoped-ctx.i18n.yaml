@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-model-selection-requires-scoped-ctx.md
+2026-08-21-model-selection-requires-scoped-ctx.md: ab711312906b8dea42eff74d8d6cbe4a3136aeee
+2026-08-21-model-selection-requires-scoped-ctx.zh.md: 59e88e0bee8c818d021f89edb285831af6d230c4

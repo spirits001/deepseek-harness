@@ -15,6 +15,7 @@ import { TypertLookupFailure } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -598,7 +599,8 @@ describe('subagent ownership fence', () => {
       meta: { cwd: '/proj', parentSession: sid('session-source'), seedLength: 1 },
     })
     const followup = vi.fn()
-    const agent = { id: session.id, session, status: 'idle', ctx, followup } as unknown as Agent
+    const agent = { id: session.id, session, status: 'idle', followup } as unknown as Agent
+    ;(agent as { ctx?: Context }).ctx = createScope(ctx, agent).ctx
     ctx.agents.register(agent)
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
@@ -618,7 +620,8 @@ describe('subagent ownership fence', () => {
     await ctx.plugin(UserQuestionService)
     const session = ctx.sessions.create(sid('session-browser-zone'), { meta: { cwd: '/proj' } })
     const followup = vi.fn()
-    const agent = { id: session.id, session, status: 'idle', ctx, followup } as unknown as Agent
+    const agent = { id: session.id, session, status: 'idle', followup } as unknown as Agent
+    ;(agent as { ctx?: Context }).ctx = createScope(ctx, agent).ctx
     ctx.agents.register(agent)
     const api = createApiProxy(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
@@ -735,14 +738,15 @@ describe('sessions.prompt synchronous rejection', () => {
     const session = ctx.sessions.create(sid('session-throwing'))
     // A live structural stub whose delivery verbs throw synchronously, the
     // shape a disposed loop presents at this gateway boundary.
-    ctx.agents.register({
+    const agent = {
       id: session.id,
       session,
       status: 'idle',
-      ctx,
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
       steer: () => { throw new Error('agent "session-throwing" lifecycle disposed') },
-    } as unknown as Agent)
+    } as unknown as Agent
+    ;(agent as { ctx?: Context }).ctx = createScope(ctx, agent).ctx
+    ctx.agents.register(agent)
     const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     for (const mode of ['queue', 'steer'] as const) {

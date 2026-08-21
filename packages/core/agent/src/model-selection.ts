@@ -5,6 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { LlmCallConfig, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { scopeOf } from '@deepseek-ai/dsh-scope'
 
 /** Complete provider, model, and optional reasoning effort selected for one live Agent. */
 export interface ModelSelection {
@@ -35,8 +36,16 @@ export interface ModelSelectionRef {
  * @param agentCtx - The selected Agent's scoped context.
  * @param selection - Mutable selection owned by the calling entry point.
  * @returns Disposer for both scoped waterfall listeners.
+ * @throws when `agentCtx` carries no scope tag: an untagged registration is
+ * admitted to every dispatch in the process, so one Agent's selection would
+ * rewrite every other Agent's assembly and routing.
  */
 export function installModelSelection(agentCtx: Context, selection: ModelSelectionRef): () => void {
+  if (scopeOf(agentCtx) === undefined) {
+    throw new Error(
+      'model-selection: installModelSelection needs the Agent\'s scoped context; an untagged context admits both listeners to every dispatch in the process',
+    )
+  }
   const disposeAssembly = agentCtx.on('system-prompt/assemble', async (_assembly, _context, next) => {
     const selected = selection.current
     const assembled = await next()

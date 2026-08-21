@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type AgentFactory } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { RpcId, type RpcRequest } from '../src/api/rpc.ts'
@@ -123,8 +124,9 @@ async function harness(
       const agent = stubAgent(session)
       // Setup runs before publication against a context that carries the
       // agent, and the agent reaches back through `agent.ctx` — the pair the
-      // gateway's own `installTarget` relies on.
-      const agentCtx = ctx.extend({ agent })
+      // gateway's own `installTarget` relies on. The scope tag keeps the
+      // model-selection listeners off other agents' dispatches.
+      const agentCtx = createScope(ctx, agent).ctx.extend({ agent })
       ;(agent as { ctx?: Context }).ctx = agentCtx
       await options.setup?.(agentCtx)
       const unregister = ctx.agents.register(agent)

@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
@@ -18,6 +18,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import type { RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
@@ -109,9 +110,11 @@ async function harness(logged?: {
     id: session.id,
     session,
     status: 'running',
-    ctx,
     inbox: { nextTurn: [], nextStep: [] },
   } as unknown as Agent
+  // The Agent object is its own scope key, as in the real factory; the model
+  // selection listeners must register on that tagged context.
+  ;(agent as { ctx?: Context }).ctx = createScope(ctx, agent).ctx
   ctx.agents.register(agent)
   return { ctx, agent, sessionId: session.id }
 }
@@ -323,7 +326,7 @@ describe('Web session model selection', () => {
 
     expect(expectValue(await api.sessions.models(request({ sessionId }))).current)
       .toEqual({ provider: 'deepseek-official', model: 'deepseek-chat' })
-    expect((await ctx.systemPrompt.assemble()).variables)
+    expect((await ctx.systemPrompt.assemble(assembleContextFor(agent))).variables)
       .toMatchObject({ provider: 'deepseek-official', model: 'deepseek-chat' })
 
     const selected = expectValue(await api.sessions.selectModel(request({
@@ -341,7 +344,7 @@ describe('Web session model selection', () => {
       'agent/request', { turn: 1, step: 0, signal }, () => Promise.resolve(seed),
     )).resolves.toMatchObject({ provider: 'deepseek-official', model: 'deepseek-chat' })
 
-    expect((await ctx.systemPrompt.assemble()).variables)
+    expect((await ctx.systemPrompt.assemble(assembleContextFor(agent))).variables)
       .toMatchObject({ provider: 'deepseek-official', model: 'private-preview' })
     await expect(agentEvents(ctx, agent).waterfall(
       'agent/request', { turn: 1, step: 1, signal }, () => Promise.resolve(seed),

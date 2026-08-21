@@ -2,8 +2,9 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -36,7 +37,7 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
         ...options.meta === undefined ? {} : { meta: options.meta },
       })
       const agent = {} as Agent
-      const agentCtx = ownerCtx.extend({ agent })
+      const agentCtx = createScope(ownerCtx, agent).ctx.extend({ agent })
       Object.assign(agent, { id: session.id, session, status: 'idle', ctx: agentCtx })
       await options.setup?.(agentCtx)
       ctx.agents.register(agent)
@@ -271,7 +272,7 @@ describe('sessions.fork', () => {
     if (!response.result.ok) return
     const child = ctx.agents.get(response.result.value.sessionId)
     if (child === undefined) throw new Error('fork did not publish the child agent')
-    const assembly = await child.ctx.systemPrompt.assemble()
+    const assembly = await ctx.systemPrompt.assemble(assembleContextFor(child))
     expect(assembly.variables).toMatchObject({
       provider: 'inherited-provider',
       model: 'inherited-model',

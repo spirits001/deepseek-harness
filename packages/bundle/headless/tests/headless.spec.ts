@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
+import { createScope } from '@deepseek-ai/dsh-scope'
 import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
@@ -63,7 +64,7 @@ async function bench(script: Script): Promise<{
       })
       let idle = Promise.resolve()
       const agent = {} as Agent
-      const agentCtx = ownerCtx.extend({ agent })
+      const agentCtx = createScope(ownerCtx, agent).ctx.extend({ agent })
       Object.assign(agent, {
         id: session.id,
         options: options.agentOptions ?? {},
